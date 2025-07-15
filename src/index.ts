@@ -1,138 +1,161 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
-export interface OpContext {
-  [key: string]: unknown;
+// Type utilities for schema unwrapping
+type UnwrapSchema<T> = T extends StandardSchemaV1 ? T : never;
+
+// Helper type to extract the original schema from a standard schema wrapper
+type ExtractOriginalSchema<T> = T;
+
+// Context type helper
+type InferContext<T> = T extends undefined ? never : T;
+
+// Operation interface
+interface Operation<TInput, TOutput, TContext = never, TSchema extends StandardSchemaV1 = any> {
+  execute(input: TInput): Promise<TOutput>;
+  handler(args: [TContext] extends [never] 
+    ? { input: TInput } 
+    : { input: TInput; ctx: TContext }
+  ): Promise<TOutput>;
+  schema: TSchema;
 }
 
-export interface OpHandler<TInput, TOutput, TContext = never> {
-  (params: TContext extends never ? { input: TInput } : { input: TInput; ctx: TContext }): Promise<TOutput> | TOutput;
+// Builder interfaces for type-safe chaining
+interface OpaBuilder<TContext = undefined> {
+  operation: OperationBuilder<TContext>;
 }
 
-export class ValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly issues?: ReadonlyArray<{ message: string }>,
-  ) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
-
-export interface Op<TInput, TOutput, TContext = never> {
-  (input: TInput): Promise<TOutput>;
-}
-
-export interface OpBuilder<TInput, TOutput, TContext = never> {
+interface OperationBuilder<TContext = undefined> {
   input<TSchema extends StandardSchemaV1>(
-    schema: TSchema,
-  ): OpBuilder<StandardSchemaV1.InferOutput<TSchema>, TOutput, TContext>;
-  handler<TNewOutput>(handler: OpHandler<TInput, TNewOutput, TContext>): Op<TInput, TNewOutput, TContext>;
+    schema: TSchema
+  ): OperationWithInput<StandardSchemaV1.InferInput<TSchema>, TSchema, TContext>;
 }
 
-export interface OpFactory<TContext = never> {
-  create(): {
-    operation: {
-      input<TSchema extends StandardSchemaV1>(
-        schema: TSchema,
-      ): OpBuilder<StandardSchemaV1.InferOutput<TSchema>, unknown, TContext>;
-    };
-  };
+interface OperationWithInput<TInput, TSchema extends StandardSchemaV1, TContext = undefined> {
+  handler<TOutput>(
+    fn: [TContext] extends [never]
+      ? (args: { input: TInput }) => Promise<TOutput>
+      : (args: { input: TInput; ctx: TContext }) => Promise<TOutput>
+  ): Operation<TInput, TOutput, TContext, TSchema>;
 }
 
-export interface OpFactoryBuilder {
-  context<TContext extends OpContext>(contextObject: TContext): OpFactory<TContext>;
+// Context builder interface
+interface OpaContextBuilder<TContext> {
+  create(): OpaBuilder<TContext>;
 }
 
-function createOp<TInput, TOutput, TContext = never>(
-  schema: StandardSchemaV1 | null,
-  handler: OpHandler<TInput, TOutput, TContext>,
-  context: TContext,
-): Op<TInput, TOutput, TContext> {
-  const op = async (input: TInput): Promise<TOutput> => {
-    let validatedInput: TInput;
-
-    if (schema) {
-      const result = schema['~standard'].validate(input);
-      const resolvedResult = result instanceof Promise ? await result : result;
-
-      if (resolvedResult.issues) {
-        throw new ValidationError('Input validation failed', resolvedResult.issues);
-      }
-
-      validatedInput = (resolvedResult as any).value as TInput;
-    } else {
-      validatedInput = input;
-    }
-
-    const params =
-      (context as any) === undefined || (context as any) === null
-        ? { input: validatedInput }
-        : { input: validatedInput, ctx: context };
-
-    return handler(params as any);
-  };
-
-  return op as Op<TInput, TOutput, TContext>;
+// Factory interface
+interface OpaFactory {
+  create(): OpaBuilder<undefined>;
+  context<TContext>(ctx: TContext): OpaContextBuilder<TContext>;
 }
 
-class OpBuilderImpl<TInput, TOutput, TContext = never> implements OpBuilder<TInput, TOutput, TContext> {
+// Validation helper using the existing standardValidate function
+async function validateInput<T extends StandardSchemaV1>(
+  schema: T,
+  input: unknown
+): Promise<StandardSchemaV1.InferOutput<T>> {
+  let result = schema['~standard'].validate(input);
+  if (result instanceof Promise) result = await result;
+
+  if (result.issues) {
+    throw new Error(JSON.stringify(result.issues, null, 2));
+  }
+
+  return result.value;
+}
+
+// Implementation classes
+class OperationImpl<TInput, TOutput, TContext = never, TSchema extends StandardSchemaV1 = any> implements Operation<TInput, TOutput, TContext, TSchema> {
   constructor(
-    private readonly schema: StandardSchemaV1 | null,
-    private readonly context: TContext,
+    private _schema: TSchema,
+    private _handler: any,
+    private _context?: TContext
   ) {}
 
+  async execute(input: TInput): Promise<TOutput> {
+    // Validate input using standard schema
+    const validatedInput = await validateInput(this._schema, input);
+    
+    // Call handler with validated input
+    if (this._context !== undefined) {
+      return this._handler({ input: validatedInput, ctx: this._context });
+    } else {
+      return this._handler({ input: validatedInput });
+    }
+  }
+
+  async handler(args: any): Promise<TOutput> {
+    return this._handler(args);
+  }
+
+  get schema() {
+    return this._schema;
+  }
+}
+
+class OperationWithInputImpl<TInput, TSchema extends StandardSchemaV1, TContext = undefined> implements OperationWithInput<TInput, TSchema, TContext> {
+  constructor(
+    private _schema: TSchema,
+    private _context?: TContext
+  ) {}
+
+  handler<TOutput>(
+    fn: [TContext] extends [never]
+      ? (args: { input: TInput }) => Promise<TOutput>
+      : (args: { input: TInput; ctx: TContext }) => Promise<TOutput>
+  ): Operation<TInput, TOutput, TContext, TSchema> {
+    return new OperationImpl<TInput, TOutput, TContext, TSchema>(this._schema, fn, this._context);
+  }
+}
+
+class OperationBuilderImpl<TContext = undefined> implements OperationBuilder<TContext> {
+  constructor(private _context?: TContext) {}
+
   input<TSchema extends StandardSchemaV1>(
-    schema: TSchema,
-  ): OpBuilder<StandardSchemaV1.InferOutput<TSchema>, TOutput, TContext> {
-    return new OpBuilderImpl(schema, this.context);
-  }
-
-  handler<TNewOutput>(handler: OpHandler<TInput, TNewOutput, TContext>): Op<TInput, TNewOutput, TContext> {
-    return createOp(this.schema, handler, this.context);
+    schema: TSchema
+  ): OperationWithInput<StandardSchemaV1.InferInput<TSchema>, TSchema, TContext> {
+    return new OperationWithInputImpl(schema, this._context);
   }
 }
 
-class OpFactoryImpl<TContext = never> implements OpFactory<TContext> {
-  constructor(private readonly context: TContext) {}
+class OpaBuilderImpl<TContext = undefined> implements OpaBuilder<TContext> {
+  constructor(private _context?: TContext) {}
 
-  create(): {
-    operation: {
-      input<TSchema extends StandardSchemaV1>(
-        schema: TSchema,
-      ): OpBuilder<StandardSchemaV1.InferOutput<TSchema>, unknown, TContext>;
-    };
-  } {
-    return {
-      operation: {
-        input<TSchema extends StandardSchemaV1>(
-          schema: TSchema,
-        ): OpBuilder<StandardSchemaV1.InferOutput<TSchema>, unknown, TContext> {
-          return new OpBuilderImpl<StandardSchemaV1.InferOutput<TSchema>, unknown, TContext>(schema, this.context);
-        },
-      },
-    };
+  get operation(): OperationBuilder<TContext> {
+    return new OperationBuilderImpl(this._context);
   }
 }
 
-export class Opa {
-  static create(): {
-    operation: {
-      input<TSchema extends StandardSchemaV1>(
-        schema: TSchema,
-      ): OpBuilder<StandardSchemaV1.InferOutput<TSchema>, unknown, never>;
-    };
-  } {
-    return new OpFactoryImpl(undefined as never).create();
-  }
+class OpaContextBuilderImpl<TContext> implements OpaContextBuilder<TContext> {
+  constructor(private _context: TContext) {}
 
-  static context<TContext extends OpContext>(ctx: TContext): OpFactory<TContext> {
-    return new OpFactoryImpl(ctx);
+  create(): OpaBuilder<TContext> {
+    return new OpaBuilderImpl(this._context);
   }
 }
 
-// Standalone operation builder for direct use
-export const op = {
-  input<TSchema extends StandardSchemaV1>(schema: TSchema): OpBuilder<StandardSchemaV1.InferOutput<TSchema>, unknown, never> {
-    return new OpBuilderImpl<StandardSchemaV1.InferOutput<TSchema>, unknown, never>(schema, undefined as never);
+// Main Opa class
+export class Opa implements OpaFactory {
+  static create(): OpaBuilder<undefined> {
+    return new OpaBuilderImpl();
   }
-};
+
+  static context<TContext>(ctx: TContext): OpaContextBuilder<TContext> {
+    return new OpaContextBuilderImpl(ctx);
+  }
+
+  // Instance methods (for potential future use)
+  create(): OpaBuilder<undefined> {
+    return Opa.create();
+  }
+
+  context<TContext>(ctx: TContext): OpaContextBuilder<TContext> {
+    return Opa.context(ctx);
+  }
+}
+
+// Standalone operation creator
+export const op: OperationBuilder<undefined> = new OperationBuilderImpl();
+
+// Export types for external use
+export type { Operation, StandardSchemaV1 };
