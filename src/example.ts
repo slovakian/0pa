@@ -1,26 +1,47 @@
-import { operation } from '.';
+import { defineOperation, withContext } from '.';
 import z from 'zod';
-import { type } from 'arktype';
 
 // 1. Regular operation definition with Zod schema
-const createUserOp = operation(
-  'createUser',
+const createUserOp = defineOperation(
+  z.object({ name: z.string(), age: z.number(), id: z.string() }),
   async ({ input, schema }) => {
+    console.log(schema.shape);
     return input;
   },
-  z.object({ name: z.string() }),
 );
 
 createUserOp.schema;
-createUserOp.execute({ name: 'hi there!' });
-createUserOp.handler({ name: 'hi there!' });
+createUserOp.execute({ name: 'hi there!', age: 18, id: '123' });
+createUserOp.handler({ name: 'hi there!', age: 18, id: '123' });
 
-const globalRepo = registry({
-  users: {
-    createUser: createUserOp,
-  },
+// Case 1: Type-only context - requires context at execution
+const repoOp = withContext<{ db: any }>(defineOperation);
+// Case 2: Value-only context - no context required at execution (context is injected)
+const repoOp2 = withContext(defineOperation, { random: 'Random context value' });
+// Case 3: Merged context - provided context + required context at execution
+const repoOp3 = withContext<{ db: any }, { random: string }>(defineOperation, { random: 'Random context value' });
+// Context is merged in any case
+
+const doSum = repoOp(z.object({ name: z.string() }), async ({ input, schema, ctx }) => {
+  console.log(ctx);
+  return input;
 });
 
-const registryAccess = registry([createUserOp]);
+// Case 1: Requires ctx object since we provided generic in repoOp def
+doSum.execute({ name: '' }, { db: '' });
 
-registryAccess.select((reg) => reg.users.createUser);
+const doSum2 = repoOp2(z.object({ name: z.string() }), async ({ input, schema, ctx }) => {
+  console.log(ctx); // ctx will be { random: 'Random context value' }
+  return input;
+});
+
+// Case 2: No ctx required - context is already injected
+doSum2.handler({ name: '' });
+
+const doSum3 = repoOp3(z.object({ name: z.string() }), async ({ input, schema, ctx }) => {
+  console.log(ctx); // ctx will be { db: any, random: string }
+  return input;
+});
+
+// Case 3: Requires ctx object for the required context type
+doSum3.handler({ name: '' }, { db: 'database' });

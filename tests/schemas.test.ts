@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defineOperation } from '../src/index2';
+import { operation } from '../src/operation';
 import { z } from 'zod';
 import * as v from 'valibot';
 import { type } from 'arktype';
@@ -12,8 +12,8 @@ describe('Schema Integration Tests', () => {
       email: z.string().email(),
     });
 
-    const createUserOp = defineOperation(
-      'createUser',
+    const createUserOp = operation(
+      userSchema,
       ({ input, schema }) => {
         // Test accessing values within handler
         expect(input.name).toBe('John Doe');
@@ -27,7 +27,6 @@ describe('Schema Integration Tests', () => {
           createdAt: new Date('2024-01-01'),
         };
       },
-      userSchema,
     );
 
     it('should validate and execute with valid input', async () => {
@@ -59,7 +58,6 @@ describe('Schema Integration Tests', () => {
 
     it('should have correct schema property', () => {
       expect(createUserOp.schema).toBe(userSchema);
-      expect(createUserOp.name).toBe('createUser');
     });
   });
 
@@ -70,8 +68,8 @@ describe('Schema Integration Tests', () => {
       category: v.picklist(['electronics', 'clothing', 'books']),
     });
 
-    const createProductOp = defineOperation(
-      'createProduct',
+    const createProductOp = operation(
+      productSchema,
       ({ input, schema }) => {
         // Test accessing values within handler
         expect(input.title).toBe('Laptop');
@@ -85,7 +83,6 @@ describe('Schema Integration Tests', () => {
           inStock: true,
         };
       },
-      productSchema,
     );
 
     it('should validate and execute with valid input', async () => {
@@ -117,7 +114,6 @@ describe('Schema Integration Tests', () => {
 
     it('should have correct schema property', () => {
       expect(createProductOp.schema).toBe(productSchema);
-      expect(createProductOp.name).toBe('createProduct');
     });
   });
 
@@ -129,8 +125,8 @@ describe('Schema Integration Tests', () => {
       status: "'pending'|'completed'|'cancelled'",
     });
 
-    const processOrderOp = defineOperation(
-      'processOrder',
+    const processOrderOp = operation(
+      orderSchema,
       ({ input, schema }) => {
         // Test accessing values within handler
         expect(input.orderId).toBe('order-456');
@@ -145,7 +141,6 @@ describe('Schema Integration Tests', () => {
           status: 'completed' as const,
         };
       },
-      orderSchema,
     );
 
     it('should validate and execute with valid input', async () => {
@@ -179,7 +174,6 @@ describe('Schema Integration Tests', () => {
 
     it('should have correct schema property', () => {
       expect(processOrderOp.schema).toBe(orderSchema);
-      expect(processOrderOp.name).toBe('processOrder');
     });
   });
 
@@ -196,8 +190,8 @@ describe('Schema Integration Tests', () => {
         metadata: z.record(z.string()),
       });
 
-      const complexOp = defineOperation(
-        'complexOperation',
+      const complexOp = operation(
+        nestedSchema,
         ({ input, schema }) => {
           expect(input.user.name).toBe('Alice');
           expect(input.user.profile.bio).toBe('Developer');
@@ -210,7 +204,6 @@ describe('Schema Integration Tests', () => {
             userData: input.user,
           };
         },
-        nestedSchema,
       );
 
       const input = {
@@ -239,8 +232,8 @@ describe('Schema Integration Tests', () => {
         optional: v.optional(v.string()),
       });
 
-      const optionalOp = defineOperation(
-        'optionalOperation',
+      const optionalOp = operation(
+        optionalSchema,
         ({ input, schema }) => {
           expect(input.required).toBe('test');
           expect(input.optional).toBeUndefined();
@@ -251,7 +244,6 @@ describe('Schema Integration Tests', () => {
             required: input.required,
           };
         },
-        optionalSchema,
       );
 
       const result = await optionalOp.execute({ required: 'test' });
