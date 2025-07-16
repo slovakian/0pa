@@ -47,15 +47,15 @@ export function withContext<TProvidedContext extends Record<string, any>>(
 ) => ContextualOperationNoContext<TSchema>;
 
 // Case 3: Merged context - combining both approaches
-export function withContext<TRequiredContext, TProvidedContext extends Record<string, any>>(
+export function withContext<TRequiredContext>(
   operationDefiner: typeof defineOperation,
-  providedContext: TProvidedContext
+  providedContext: Record<string, any>
 ): <TSchema extends StandardSchemaV1>(
   schema: TSchema,
   handler: (params: {
     input: InferInput<TSchema>;
     schema: TSchema;
-    ctx: TRequiredContext & TProvidedContext;
+    ctx: TRequiredContext & typeof providedContext;
   }) => any
 ) => ContextualOperationWithContext<TSchema, TRequiredContext>;
 

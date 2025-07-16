@@ -19,7 +19,7 @@ const repoOp = withContext<{ db: any }>(defineOperation);
 // Case 2: Value-only context - no context required at execution (context is injected)
 const repoOp2 = withContext(defineOperation, { random: 'Random context value' });
 // Case 3: Merged context - provided context + required context at execution
-const repoOp3 = withContext<{ db: any }, { random: string }>(defineOperation, { random: 'Random context value' });
+const repoOp3 = withContext<{ db: any }>(defineOperation, { random: 'Random context value' });
 // Context is merged in any case
 
 const doSum = repoOp(z.object({ name: z.string() }), async ({ input, schema, ctx }) => {
@@ -44,4 +44,4 @@ const doSum3 = repoOp3(z.object({ name: z.string() }), async ({ input, schema, c
 });
 
 // Case 3: Requires ctx object for the required context type
-doSum3.handler({ name: '' }, { db: 'database' });
+doSum3.handler({ name: '' }, { db: '' });
