@@ -13,14 +13,14 @@
     "composable",
     "type-safe"
   ],
-  "homepage": "https://github.com/yourusername/0pa",
+  "homepage": "https://github.com/slovakian/0pa",
   "bugs": {
-    "url": "https://github.com/yourusername/0pa/issues"
+    "url": "https://github.com/slovakian/0pa/issues"
   },
-  "author": "Jason",
+  "author": "slovakian",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/0pa.git"
+    "url": "git+https://github.com/slovakian/0pa.git"
   },
   "type": "module",
   "main": "dist/index.js",

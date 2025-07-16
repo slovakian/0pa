@@ -12,10 +12,7 @@ type InferContext<T> = T extends undefined ? never : T;
 // Operation interface
 interface Operation<TInput, TOutput, TContext = never, TSchema extends StandardSchemaV1 = any> {
   execute(input: TInput): Promise<TOutput>;
-  handler(args: [TContext] extends [never] 
-    ? { input: TInput } 
-    : { input: TInput; ctx: TContext }
-  ): Promise<TOutput>;
+  handler(args: [TContext] extends [never] ? { input: TInput } : { input: TInput; ctx: TContext }): Promise<TOutput>;
   schema: TSchema;
 }
 
@@ -26,7 +23,7 @@ interface OpaBuilder<TContext = undefined> {
 
 interface OperationBuilder<TContext = undefined> {
   input<TSchema extends StandardSchemaV1>(
-    schema: TSchema
+    schema: TSchema,
   ): OperationWithInput<StandardSchemaV1.InferInput<TSchema>, TSchema, TContext>;
 }
 
@@ -34,7 +31,7 @@ interface OperationWithInput<TInput, TSchema extends StandardSchemaV1, TContext 
   handler<TOutput>(
     fn: [TContext] extends [never]
       ? (args: { input: TInput }) => Promise<TOutput>
-      : (args: { input: TInput; ctx: TContext }) => Promise<TOutput>
+      : (args: { input: TInput; ctx: TContext }) => Promise<TOutput>,
   ): Operation<TInput, TOutput, TContext, TSchema>;
 }
 
@@ -52,7 +49,7 @@ interface OpaFactory {
 // Validation helper using the existing standardValidate function
 async function validateInput<T extends StandardSchemaV1>(
   schema: T,
-  input: unknown
+  input: unknown,
 ): Promise<StandardSchemaV1.InferOutput<T>> {
   let result = schema['~standard'].validate(input);
   if (result instanceof Promise) result = await result;
@@ -65,17 +62,19 @@ async function validateInput<T extends StandardSchemaV1>(
 }
 
 // Implementation classes
-class OperationImpl<TInput, TOutput, TContext = never, TSchema extends StandardSchemaV1 = any> implements Operation<TInput, TOutput, TContext, TSchema> {
+class OperationImpl<TInput, TOutput, TContext = never, TSchema extends StandardSchemaV1 = any>
+  implements Operation<TInput, TOutput, TContext, TSchema>
+{
   constructor(
     private _schema: TSchema,
     private _handler: any,
-    private _context?: TContext
+    private _context?: TContext,
   ) {}
 
   async execute(input: TInput): Promise<TOutput> {
     // Validate input using standard schema
     const validatedInput = await validateInput(this._schema, input);
-    
+
     // Call handler with validated input
     if (this._context !== undefined) {
       return this._handler({ input: validatedInput, ctx: this._context });
@@ -93,16 +92,18 @@ class OperationImpl<TInput, TOutput, TContext = never, TSchema extends StandardS
   }
 }
 
-class OperationWithInputImpl<TInput, TSchema extends StandardSchemaV1, TContext = undefined> implements OperationWithInput<TInput, TSchema, TContext> {
+class OperationWithInputImpl<TInput, TSchema extends StandardSchemaV1, TContext = undefined>
+  implements OperationWithInput<TInput, TSchema, TContext>
+{
   constructor(
     private _schema: TSchema,
-    private _context?: TContext
+    private _context?: TContext,
   ) {}
 
   handler<TOutput>(
     fn: [TContext] extends [never]
       ? (args: { input: TInput }) => Promise<TOutput>
-      : (args: { input: TInput; ctx: TContext }) => Promise<TOutput>
+      : (args: { input: TInput; ctx: TContext }) => Promise<TOutput>,
   ): Operation<TInput, TOutput, TContext, TSchema> {
     return new OperationImpl<TInput, TOutput, TContext, TSchema>(this._schema, fn, this._context);
   }
@@ -112,7 +113,7 @@ class OperationBuilderImpl<TContext = undefined> implements OperationBuilder<TCo
   constructor(private _context?: TContext) {}
 
   input<TSchema extends StandardSchemaV1>(
-    schema: TSchema
+    schema: TSchema,
   ): OperationWithInput<StandardSchemaV1.InferInput<TSchema>, TSchema, TContext> {
     return new OperationWithInputImpl(schema, this._context);
   }

@@ -1,162 +1,26 @@
 # 0pa
 
-A TypeScript library for creating type-safe, composable operations with schema validation and context management.
+```typescript
+// Two ways to define operations
+const op1 = op.input(schema).handler(async ({ input }) => result);
+const op2 = Opa.context(ctx)
+  .create()
+  .operation.input(schema)
+  .handler(async ({ input, ctx }) => result);
 
-## Features
-
-- **Type-safe operations** with full TypeScript support
-- **Schema validation** using popular libraries (Zod, Valibot, ArkType)
-- **Context management** for dependency injection and shared state
-- **Composable architecture** for building complex business logic
-- **Zero dependencies**
-- **Lightweight** and performant
+// Access properties
+op1.execute(data); // validated
+op1.schema; // schema
+op1.handler(args); // direct
+```
 
 ## Installation
 
 ```bash
 npm install 0pa
-# or
-pnpm add 0pa
-# or
-yarn add 0pa
 ```
 
-To leverage 0pa's validation capabilities, you can use any Standard Schema-compliant validation library like Zod, Valibot, or ArkType:
-
-```bash
-# Choose one:
-npm install zod              # Zod 3.24.0+
-npm install valibot          # Valibot v1.0+
-npm install arktype          # ArkType v2.0+
-```
-
-## Philosophy
-
-0pa is built around the factory pattern for operations, which provides several key benefits:
-
-- **Consistent Context Management**: All operations require context to be defined upfront, eliminating runtime context errors
-- **Type Safety**: Context types are locked in at factory creation time, providing full TypeScript support throughout the operation lifecycle
-- **Dependency Injection**: Context serves as a dependency injection container, making operations testable and portable
-- **Composability**: Operations created from the same factory share context, enabling easy composition of complex business logic
-- **Clarity**: The factory pattern makes it explicit what dependencies an operation needs
-
-## Quick Start
-
-### Basic Operation
-
-```typescript
-import { opFactory } from '0pa';
-import { z } from 'zod'; // or any Standard Schema library
-
-// Define your schema
-const UserSchema = z.object({
-  name: z.string(),
-  email: z.string().email(),
-  age: z.number().min(0),
-});
-
-const createOp = opFactory().context({}).create();
-
-// Create an operation using a factory with empty context
-const createUser = createOp()
-  .input(UserSchema)
-  .handler(async ({ input, ctx }) => {
-    // input is fully typed based on your schema
-    console.log(`Creating user: ${input.name}`);
-
-    // Your business logic here
-    const user = {
-      id: Math.random().toString(36),
-      ...input,
-      createdAt: new Date(),
-    };
-
-    return user;
-  });
-
-// Execute the operation (context is already bound)
-const result = await createUser.execute({
-  name: 'John Doe',
-  email: 'john@example.com',
-  age: 30,
-});
-```
-
-### Context Usage
-
-Context is a powerful feature that allows you to inject dependencies and share state across operations. In 0pa, context is always provided upfront when creating the operation factory, ensuring type safety and eliminating the need to pass context during execution.
-
-#### Understanding Context Scope
-
-Context in 0pa has the following characteristics:
-
-- **Factory-bound**: Context is set once when creating the factory and is shared across all operations created from that factory
-- **Type-safe**: Context types are locked in at factory creation time, providing full TypeScript support
-- **Immutable**: Once set, context cannot be changed for operations created from that factory
-- **Accessible**: All operations created from the factory have access to the same context instance
-
-#### Database and Logger Context
-
-```typescript
-import { createOpFactory } from '0pa';
-import { z } from 'zod';
-
-// Define your context type
-interface AppContext {
-  database: {
-    save: (data: any) => Promise<any>;
-    find: (id: string) => Promise<any>;
-  };
-  logger: {
-    info: (message: string) => void;
-    error: (message: string) => void;
-  };
-}
-
-// Create a factory with context
-const context: AppContext = {
-  database: {
-    save: async (data) => ({ ...data, id: 'saved-id' }),
-    find: async (id) => ({ id, name: 'Found User' }),
-  },
-  logger: {
-    info: (msg) => console.log(`[INFO] ${msg}`),
-    error: (msg) => console.error(`[ERROR] ${msg}`),
-  },
-};
-
-const opFactory = createOpFactory().context<AppContext>(context).create();
-
-// Create operations using the factory
-const saveUser = opFactory
-  .create()
-  .input(
-    z.object({
-      name: z.string(),
-      email: z.string().email(),
-    }),
-  )
-  .handler(async ({ input, ctx }) => {
-    ctx.logger.info(`Saving user: ${input.name}`);
-
-    try {
-      const savedUser = await ctx.database.save(input);
-      ctx.logger.info(`User saved with ID: ${savedUser.id}`);
-      return savedUser;
-    } catch (error) {
-      ctx.logger.error(`Failed to save user: ${error}`);
-      throw error;
-    }
-  });
-
-// Execute (context is already bound to the factory operation)
-const user = await saveUser.execute({
-  name: 'Jane Doe',
-  email: 'jane@example.com',
-});
-```
-
-### Works with Any Standard Schema Library
+## Works with Any Standard Schema Library
 
 This package works with any library that implements the Standard Schema specification:
 
@@ -173,21 +37,11 @@ const valibotSchema = v.string();
 import { type } from 'arktype';
 const arkTypeSchema = type('string');
 
+const op = Opa.create().operation;
 // All work the same way!
-const factory = createOpFactory().context({});
-
-const op1 = factory
-  .create()
-  .input(zodSchema)
-  .handler(async ({ input }) => input.toUpperCase());
-const op2 = factory
-  .create()
-  .input(valibotSchema)
-  .handler(async ({ input }) => input.toUpperCase());
-const op3 = factory
-  .create()
-  .input(arkTypeSchema)
-  .handler(async ({ input }) => input.toUpperCase());
+const op1 = op.input(zodSchema).handler(async ({ input }) => input.toUpperCase());
+const op2 = op.input(valibotSchema).handler(async ({ input }) => input.toUpperCase());
+const op3 = op.input(arkTypeSchema).handler(async ({ input }) => input.toUpperCase());
 
 // Access the original schema API through the operation's schema property
 const userSchema = z.object({
@@ -195,9 +49,8 @@ const userSchema = z.object({
   email: z.string().email(),
 });
 
-const createUserOp = factory
-  .create()
-  .input(userSchema)
+const createUserOp = Opa.create()
+  .operation.input(userSchema)
   .handler(async ({ input }) => ({ ...input, id: 'user-123' }));
 
 // You can access all the original schema methods
@@ -211,9 +64,8 @@ const valibotUserSchema = v.object({
   email: v.pipe(v.string(), v.email()),
 });
 
-const valibotOp = factory
-  .create()
-  .input(valibotUserSchema)
+const valibotOp = Opa.create()
+  .operation.input(valibotUserSchema)
   .handler(async ({ input }) => input);
 
 // Access Valibot schema methods
@@ -225,7 +77,7 @@ const valibotEntries = valibotOp.schema.entries; // Valibot schema entries
 You can integrate 0pa operations with tRPC by using the operation's schema directly in tRPC procedures:
 
 ```typescript
-import { createOpFactory } from '0pa';
+import { Opa } from '0pa';
 import { z } from 'zod';
 import { initTRPC } from '@trpc/server';
 
@@ -237,24 +89,16 @@ const createPostSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
-// Create your operation factory with context
-const opFactory = createOpFactory().context<{
-  database: Database;
-  logger: Logger;
-}>({
+const baseOp = Opa.context({
   database: new Database(),
   logger: new Logger(),
+}).create().operation;
+// Create your operation with context
+const createPostOp = baseOp.input(createPostSchema).handler(async ({ input, ctx }) => {
+  // Your business logic here
+  ctx.logger.info(`Creating post: ${input.title}`);
+  return ctx.database.posts.create(input);
 });
-
-// Create your operation
-const createPostOp = opFactory
-  .create()
-  .input(createPostSchema)
-  .handler(async ({ input, ctx }) => {
-    // Your business logic here
-    ctx.logger.info(`Creating post: ${input.title}`);
-    return ctx.database.posts.create(input);
-  });
 
 // tRPC setup
 const t = initTRPC.context<{ session: { user: { id: string } } }>().create();
@@ -265,7 +109,7 @@ const appRouter = t.router({
     .input(createPostOp.schema.omit({ userId: true }))
     .mutation(async ({ input, ctx }) => {
       // Execute the operation with userId from tRPC session
-      return createPostOp.execute({
+      return await createPostOp.execute({
         ...input,
         userId: ctx.session.user.id, // Inject userId from tRPC context
       });
@@ -283,74 +127,53 @@ const result = await trpc.createPost.mutate({
 
 ### Error Handling
 
-When input validation fails, operations throw a `ValidationError`:
+When input validation fails, operations throw an error with validation details:
 
 ```typescript
-import { createOpFactory, ValidationError } from '0pa';
+import { Opa } from '0pa';
 import { z } from 'zod';
 
-const op = createOpFactory()
-  .context({})
-  .create()
-  .input(z.object({ name: z.string() }))
+const op = Opa.create()
+  .operation.input(z.object({ name: z.string() }))
   .handler(async ({ input }) => input.name);
 
 try {
   await op.execute({ name: 123 });
 } catch (error) {
-  if (error instanceof ValidationError) {
-    console.log('Validation failed:', error.issues);
-  }
+  console.log('Validation failed:', error.message);
 }
 ```
 
 ## Advanced Example: Repos/Services Architecture
 
-Here's how 0pa can be used in a larger application with a repos/services architecture, where services have access to multiple repositories and can compose complex business logic:
+0pa can be used in a repos/services architecture, where repository operations are defined and then used within service operations:
 
 ```typescript
-import { createOpFactory } from '0pa';
+import { Opa } from '0pa';
 import { z } from 'zod';
 
-// Define your service context with access to multiple repos
-interface ServiceContext {
-  repos: {
-    users: UserRepository;
-    orders: OrderRepository;
-    payments: PaymentRepository;
-  };
+// Define repository context
+interface RepoContext {
+  db: Database;
   logger: {
     info: (msg: string) => void;
     error: (msg: string, err?: any) => void;
   };
-  config: {
-    maxOrderValue: number;
-    taxRate: number;
-  };
 }
 
-// Create a service factory
-const context: ServiceContext = {
-  repos: {
-    users: new UserRepositoryImpl(),
-    orders: new OrderRepositoryImpl(),
-    payments: new PaymentRepositoryImpl(),
-  },
+// Create repo operation builder
+const repoContext = {
+  db: database,
   logger: {
-    info: (msg) => console.log(`[INFO] ${msg}`),
-    error: (msg, err) => console.error(`[ERROR] ${msg}`, err),
-  },
-  config: {
-    maxOrderValue: 10000,
-    taxRate: 0.08,
+    info: (msg) => console.log(`[REPO] ${msg}`),
+    error: (msg, err) => console.error(`[REPO] ${msg}`, err),
   },
 };
 
-const serviceFactory = createOpFactory().context<ServiceContext>(context);
+const repoOp = Opa.context(repoContext).create().operation;
 
-// User Service Operations
-const createUserOp = serviceFactory
-  .create()
+// Define repository operations
+const createUserRepoOp = repoOp
   .input(
     z.object({
       name: z.string().min(1),
@@ -359,168 +182,68 @@ const createUserOp = serviceFactory
     }),
   )
   .handler(async ({ input, ctx }) => {
-    const { repos, logger } = ctx;
+    const { db, logger } = ctx;
 
-    // Check if user already exists
-    const existingUser = await repos.users.findByEmail(input.email);
+    logger.info(`Creating user in database: ${input.email}`);
+    const user = await db.users.create(input);
+
+    return user;
+  });
+
+const findUserByEmailRepoOp = repoOp.input(z.object({ email: z.string().email() })).handler(async ({ input, ctx }) => {
+  const { db } = ctx;
+  return await db.users.findByEmail(input.email);
+});
+
+// Create service context with repo operations
+const serviceContext = {
+  repos: {
+    createUser: createUserRepoOp,
+    findUserByEmail: findUserByEmailRepoOp,
+  },
+  logger: {
+    info: (msg) => console.log(`[SERVICE] ${msg}`),
+    error: (msg, err) => console.error(`[SERVICE] ${msg}`, err),
+  },
+};
+
+const serviceOp = Opa.context(serviceContext).create().operation;
+
+// Service operation that uses repo operations
+const registerUserServiceOp = serviceOp
+  .input(
+    z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      age: z.number().min(18),
+    }),
+  )
+  .handler(async ({ input, ctx }) => {
+    const { repoOps, logger } = ctx;
+
+    logger.info(`Registering new user: ${input.email}`);
+
+    // Check if user already exists using repo operation
+    const existingUser = await repos.findUserByEmail.execute({ email: input.email });
     if (existingUser) {
       throw new Error('User with this email already exists');
     }
 
-    // Create new user
-    logger.info(`Creating new user: ${input.email}`);
-    const user = await repos.users.create(input);
+    // Create user using repo operation
+    const user = await repos.createUser.execute(input);
 
-    logger.info(`User created successfully: ${user.id}`);
-    return user;
-  });
-
-// Order Service Operations - Complex business logic using multiple repos
-const createOrderOp = serviceFactory
-  .create()
-  .input(
-    z.object({
-      userId: z.string(),
-      items: z.array(
-        z.object({
-          productId: z.string(),
-          quantity: z.number().min(1),
-          price: z.number().min(0),
-        }),
-      ),
-      paymentMethod: z.enum(['credit_card', 'paypal', 'bank_transfer']),
-    }),
-  )
-  .handler(async ({ input, ctx }) => {
-    const { repos, logger, config } = ctx;
-
-    // 1. Validate user exists
-    logger.info(`Processing order for user: ${input.userId}`);
-    const user = await repos.users.findById(input.userId);
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    // 2. Calculate order total
-    const subtotal = input.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * config.taxRate;
-    const total = subtotal + tax;
-
-    // 3. Validate order value
-    if (total > config.maxOrderValue) {
-      throw new Error(`Order value ${total} exceeds maximum allowed ${config.maxOrderValue}`);
-    }
-
-    // 4. Create order
-    const orderData = {
-      userId: input.userId,
-      items: input.items,
-      subtotal,
-      tax,
-      total,
-      status: 'pending' as OrderStatus,
+    logger.info(`User registered successfully: ${user.id}`);
+    return {
+      user,
+      message: 'User registered successfully',
     };
-
-    const order = await repos.orders.create(orderData);
-    logger.info(`Order created: ${order.id}`);
-
-    // 5. Process payment
-    try {
-      const paymentResult = await repos.payments.processPayment({
-        orderId: order.id,
-        amount: total,
-        method: input.paymentMethod,
-        userId: input.userId,
-      });
-
-      if (paymentResult.success) {
-        // Update order status
-        const updatedOrder = await repos.orders.updateStatus(order.id, 'paid');
-        logger.info(`Payment successful for order: ${order.id}`);
-
-        return {
-          order: updatedOrder,
-          payment: paymentResult,
-        };
-      } else {
-        // Payment failed, update order status
-        await repos.orders.updateStatus(order.id, 'payment_failed');
-        throw new Error(`Payment failed: ${paymentResult.error}`);
-      }
-    } catch (error) {
-      logger.error(`Payment processing failed for order: ${order.id}`, error);
-      await repos.orders.updateStatus(order.id, 'payment_failed');
-      throw error;
-    }
   });
 
-// User Analytics Service - Aggregating data from multiple repos
-const getUserAnalyticsOp = serviceFactory
-  .create()
-  .input(
-    z.object({
-      userId: z.string(),
-    }),
-  )
-  .handler(async ({ input, ctx }) => {
-    const { repos, logger } = ctx;
-
-    logger.info(`Generating analytics for user: ${input.userId}`);
-
-    // Fetch user data
-    const user = await repos.users.findById(input.userId);
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    // Fetch user's orders
-    const orders = await repos.orders.findByUserId(input.userId);
-
-    // Calculate analytics
-    const totalOrders = orders.length;
-    const totalSpent = orders.filter((order) => order.status === 'paid').reduce((sum, order) => sum + order.total, 0);
-
-    const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
-
-    const analytics = {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        memberSince: user.createdAt,
-      },
-      orders: {
-        total: totalOrders,
-        totalSpent,
-        averageOrderValue,
-        lastOrderDate: orders.length > 0 ? Math.max(...orders.map((o) => o.createdAt.getTime())) : null,
-      },
-    };
-
-    logger.info(`Analytics generated for user: ${input.userId}`);
-    return analytics;
-  });
-
-// Usage in your application
-
-// Execute operations (context is already bound)
-const newUser = await createUserOp.execute({
+// Usage
+const result = await registerUserServiceOp.execute({
   name: 'John Doe',
   email: 'john@example.com',
   age: 25,
-});
-
-const orderResult = await createOrderOp.execute({
-  userId: newUser.id,
-  items: [
-    { productId: 'prod-1', quantity: 2, price: 29.99 },
-    { productId: 'prod-2', quantity: 1, price: 49.99 },
-  ],
-  paymentMethod: 'credit_card',
-});
-
-const analytics = await getUserAnalyticsOp.execute({
-  userId: newUser.id,
 });
 ```
 
@@ -534,47 +257,57 @@ This architecture provides several benefits:
 
 ## API Reference
 
-### `createOpFactory()`
+### `Opa`
 
-Creates a new operation factory builder that allows you to define shared context.
+Main class for creating operations with optional context.
 
-**Returns:** `OpFactoryBuilder`
+#### Static Methods
+
+- `Opa.create(): OpaBuilder<undefined>` - Create a new operation builder without context
+- `Opa.context<TContext>(ctx: TContext): OpaContextBuilder<TContext>` - Create a context builder with shared context
 
 ### Core Interfaces
 
-#### `Op<TInput, TOutput, TContext, TSchema>`
+#### `Operation<TInput, TOutput, TContext, TSchema>`
 
-Represents an operation with bound context that can be executed.
+Represents an operation that can be executed.
 
-- `execute(input: unknown): Promise<TOutput>` - Execute the operation (context is pre-bound)
+- `execute(input: TInput): Promise<TOutput>` - Execute the operation with input validation
 - `schema: TSchema` - The input schema
-- `handler: OpHandler<TInput, TOutput, TContext>` - The operation handler
-- `context: TContext` - The bound context
+- `handler(args: { input: TInput; ctx?: TContext }): Promise<TOutput>` - The operation handler
 
-#### `OpFactoryBuilder`
+#### `OpaBuilder<TContext>`
 
-Builder for creating operation factories.
+Builder for creating operations.
 
-- `context<TContext>(context: TContext): OpFactory<TContext>` - Set shared context and create factory
+- `operation: OperationBuilder<TContext>` - Access to operation builder
 
-#### `OpFactory<TContext>`
+#### `OperationBuilder<TContext>`
 
-Factory for creating operations with shared context.
+Builder for defining operation input and handler.
 
-- `create(): OpBuilder<...>` - Create a new operation builder
+- `input<TSchema>(schema: TSchema): OperationWithInput<...>` - Set input schema
 
-#### `OpBuilder<TInput, TOutput, TContext, TSchema>`
+#### `OperationWithInput<TInput, TSchema, TContext>`
 
-Builder for creating operations from a factory.
+Builder for defining operation handler after input schema is set.
 
-- `input<TNewSchema>(schema: TNewSchema): OpBuilder<...>` - Set input schema
-- `handler<TNewOutput>(handler: OpHandler<TInput, TNewOutput, TContext>): Op<...>` - Set handler and create operation
+- `handler<TOutput>(fn: HandlerFunction): Operation<...>` - Set handler and create operation
+
+#### `OpaContextBuilder<TContext>`
+
+Builder for creating operations with shared context.
+
+- `create(): OpaBuilder<TContext>` - Create a new operation builder with bound context
+
+### Standalone Export
+
+- `op: OperationBuilder<undefined>` - Standalone operation builder without context
 
 ### Types
 
-- `OpContext` - Base context interface (extends `Record<string, unknown>`)
-- `OpHandler<TInput, TOutput, TContext>` - Handler function type: `(params: { input: TInput; ctx: TContext }) => Promise<TOutput> | TOutput`
-- `ValidationError` - Error thrown when input validation fails, contains `issues: ReadonlyArray<{ message: string }>`
+- `Operation<TInput, TOutput, TContext, TSchema>` - Main operation interface
+- `StandardSchemaV1` - Re-exported from @standard-schema/spec
 
 ## License
 
